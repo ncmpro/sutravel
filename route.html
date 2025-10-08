@@ -1,0 +1,94 @@
+{
+  "markers":[{"lat":38.72,"lon":-9.14,"name":"Exemplo"}],
+  "polyline":[[38.72,-9.14],[38.73,-9.13]]
+}
+
+
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>SuTravel Map</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <style>html,body,#map{height:100%;margin:0;padding:0}body{font-family:Arial,Helvetica,sans-serif}</style>
+</head>
+<body>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+  // Inicialização do mapa com tiles OSM
+  var map = L.map('map', {zoomControl:true}).setView([38.72, -9.14], 14);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+
+  var markersLayer = L.layerGroup().addTo(map);
+  var polyLayer = L.layerGroup().addTo(map);
+
+  function clearLayers(){
+    markersLayer.clearLayers();
+    polyLayer.clearLayers();
+  }
+
+  function drawFromApp(jsonText){
+    clearLayers();
+    if(!jsonText) return;
+    var data;
+    try{
+      data = JSON.parse(jsonText);
+    }catch(e){ console.error('JSON parse error', e); return; }
+
+    // markers
+    if(data.markers && Array.isArray(data.markers)){
+      data.markers.forEach(function(m){
+        try{
+          var mk = L.marker([m.lat, m.lon]).bindPopup('<b>'+ (m.name||'') +'</b>');
+          mk.addTo(markersLayer);
+        }catch(e){}
+      });
+    }
+
+    // polyline: expecting array [[lat,lon],[lat,lon],...]
+    if(data.polyline && Array.isArray(data.polyline) && data.polyline.length>0){
+      var latlngs = data.polyline.map(function(p){ return [p[0], p[1]]; });
+      var poly = L.polyline(latlngs, {weight:4}).addTo(polyLayer);
+      map.fitBounds(poly.getBounds(), {padding:[30,30]});
+      return;
+    }
+
+    // if no polyline but markers exist -> fit bounds to markers
+    var group = [];
+    if(data.markers && data.markers.length){
+      data.markers.forEach(function(m){ group.push([m.lat,m.lon]); });
+      map.fitBounds(group,{padding:[30,30]});
+    }
+  }
+
+  // Bridge for App Inventor -> called on load
+  function onAppLoad(){
+    var txt = '';
+    if(window.AppInventor && window.AppInventor.getWebViewString){
+      txt = window.AppInventor.getWebViewString();
+      if(txt && txt.length>0){
+        drawFromApp(txt);
+        // ack back to app
+        window.AppInventor.setWebViewString('OK');
+      }
+    } else {
+      // If loaded in browser for testing, try localStorage payload
+      var test = localStorage.getItem('sutravel_test');
+      if(test) drawFromApp(test);
+    }
+  }
+  window.onload = onAppLoad;
+
+  // Optional: allow page to receive new payloads via window.postMessage
+  window.addEventListener('message', function(ev){
+    if(ev && ev.data) drawFromApp(ev.data);
+  }, false);
+</script>
+</body>
+</html>
